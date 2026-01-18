@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة القيادة - واتساب جوينر</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Almarai', sans-serif; background-color: #f1f5f9; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .custom-check:checked + div { background-color: #ecfdf5; border-color: #10b981; }
+        .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px); }
+    </style>
+</head>
+<body class="text-slate-800 h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 p-4 z-20 shadow-sm flex justify-between items-center">
+        <div class="flex items-center gap-3">
+            <div class="bg-emerald-600 text-white p-2 rounded-lg font-bold text-xl">WJ</div>
+            <h1 class="font-bold text-lg text-slate-700">التحكم المركزي (الخاص)</h1>
+        </div>
+        <button onclick="openModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-bold shadow transition flex items-center gap-2">
+            <span>+</span> إضافة حساب جديد
+        </button>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden">
+        
+        <!-- Left Panel: Accounts List -->
+        <aside class="w-full md:w-1/3 lg:w-1/4 bg-white border-l border-slate-200 flex flex-col z-10">
+            <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                <span class="font-bold text-sm text-slate-500">حساباتي المتصلة</span>
+                <button onclick="selectAll()" class="text-xs text-blue-600 font-bold hover:underline">تحديد الكل</button>
+            </div>
+            
+            <div id="accountsList" class="flex-1 overflow-y-auto p-4 space-y-3">
+                <p id="noAccountsMsg" class="text-center text-slate-400 text-sm mt-10">لم تقم بإضافة حسابات على هذا الجهاز.</p>
+            </div>
+        </aside>
+
+        <!-- Right Panel: Controls & Logs -->
+        <main class="flex-1 flex flex-col bg-slate-100 relative p-4 md:p-6 overflow-y-auto">
+            
+            <!-- Global Controls -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
+                <h2 class="font-bold text-lg text-slate-700 mb-4 border-b pb-2">🕹️ التحكم الجماعي</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Link Input -->
+                    <div>
+                        <label class="block text-sm font-bold text-slate-600 mb-2">لصق الروابط هنا</label>
+                        <textarea id="linksInput" class="w-full h-32 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none text-sm font-mono" placeholder="https://chat.whatsapp.com/......"></textarea>
+                        <button onclick="sendLinks()" class="mt-2 w-full bg-slate-800 text-white py-2 rounded-lg font-bold hover:bg-slate-700 transition">توزيع الروابط</button>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="flex flex-col justify-between">
+                        <div>
+                            <label class="block text-sm font-bold text-slate-600 mb-2">الفاصل الزمني (ثواني)</label>
+                            <div class="flex gap-2 mb-4">
+                                <!-- تم إصلاح معرف الإدخال لضمان قراءته بشكل صحيح -->
+                                <input type="number" id="globalInterval" value="10" min="5" class="w-20 p-2 border border-slate-300 rounded-lg text-center font-bold">
+                                <button onclick="controlSelected('interval')" class="bg-slate-200 text-slate-700 px-4 rounded-lg font-bold hover:bg-slate-300">تحديث الوقت</button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="controlSelected('start')" class="bg-emerald-100 text-emerald-700 py-3 rounded-lg font-bold hover:bg-emerald-200 transition border border-emerald-200 flex justify-center items-center gap-2">
+                                <span>▶</span> تشغيل
+                            </button>
+                            <button onclick="controlSelected('stop')" class="bg-amber-100 text-amber-700 py-3 rounded-lg font-bold hover:bg-amber-200 transition border border-amber-200 flex justify-center items-center gap-2">
+                                <span>⏸</span> إيقاف
+                            </button>
+                            <button onclick="controlSelected('clear')" class="col-span-2 bg-red-50 text-red-600 py-2 rounded-lg font-bold hover:bg-red-100 transition border border-red-100 text-sm">
+                                🗑 تصفية الروابط
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Console -->
+            <div class="flex-1 bg-slate-900 rounded-2xl shadow-lg flex flex-col overflow-hidden min-h-[300px]">
+                <div class="p-3 bg-slate-800 border-b border-slate-700 flex justify-between">
+                    <span class="text-xs font-mono text-slate-400">سجل العمليات</span>
+                    <button onclick="document.getElementById('logs').innerHTML=''" class="text-xs text-slate-500 hover:text-white">مسح</button>
+                </div>
+                <div id="logs" class="flex-1 p-4 font-mono text-sm space-y-2 overflow-y-auto text-slate-300">
+                    <!-- Logs appear here -->
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Modal: Add Account -->
+    <div id="addModal" class="fixed inset-0 z-50 bg-black/50 hidden flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all scale-100">
+            <h2 class="text-xl font-bold mb-4 text-slate-800">إضافة حساب جديد</h2>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-bold text-slate-600 mb-1">اسم الجلسة (لتمييز الحساب)</label>
+                <input type="text" id="newSessionId" placeholder="مثال: العمل، الشخصي..." class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none">
+            </div>
+
+            <!-- Tabs -->
+            <div class="flex bg-slate-100 p-1 rounded-lg mb-4">
+                <button onclick="switchTab('qr')" id="tab-qr" class="flex-1 py-2 rounded-md font-bold text-sm bg-white shadow text-slate-800 transition">QR Code</button>
+                <button onclick="switchTab('phone')" id="tab-phone" class="flex-1 py-2 rounded-md font-bold text-sm text-slate-500 hover:bg-white/50 transition">رقم الهاتف</button>
+            </div>
+
+            <!-- Phone Input Area -->
+            <div id="phoneArea" class="hidden mb-4">
+                <label class="block text-sm font-bold text-slate-600 mb-1">رقم الهاتف (مع مفتاح الدولة)</label>
+                <input type="text" id="phoneNumber" placeholder="967770000000" class="w-full p-3 border border-slate-300 rounded-lg font-mono ltr text-left">
+                <p class="text-xs text-slate-400 mt-1 text-left" dir="ltr">Example: 966501234567</p>
+            </div>
+
+            <!-- QR Display Area / Pairing Code Display -->
+            <div id="connectDisplay" class="hidden mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 text-center min-h-[200px] flex flex-col items-center justify-center">
+                <div id="connectLoader" class="w-8 h-8 border-4 border-slate-200 border-t-emerald-500 rounded-full animate-spin mb-2"></div>
+                <p id="connectStatus" class="text-sm text-slate-500">جاري الاتصال بالخادم...</p>
+                
+                <img id="qrImage" class="w-48 h-48 object-contain mt-2 hidden" alt="QR">
+                
+                <div id="pairingCodeDisplay" class="hidden mt-2">
+                    <p class="text-xs text-slate-500 mb-2">أدخل هذا الكود في هاتفك:</p>
+                    <div id="pCode" class="text-3xl font-mono font-bold tracking-widest text-slate-800 bg-white p-3 rounded-lg border border-slate-300 select-all"></div>
+                </div>
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="startSessionCreation()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-bold">اتصال</button>
+                <button onclick="closeModal()" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-3 rounded-lg font-bold">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let connectionMethod = 'qr';
+        let currentCreatingSession = null;
+
+        // --- إدارة الجلسات المحلية (للعزل) ---
+        // نقوم بقراءة الجلسات المحفوظة في هذا المتصفح فقط
+        function getMySessions() {
+            return JSON.parse(localStorage.getItem('my_sessions') || '[]');
+        }
+
+        function saveMySession(sessionId) {
+            const sessions = getMySessions();
+            if (!sessions.includes(sessionId)) {
+                sessions.push(sessionId);
+                localStorage.setItem('my_sessions', JSON.stringify(sessions));
+            }
+        }
+
+        function removeMySession(sessionId) {
+            const sessions = getMySessions().filter(id => id !== sessionId);
+            localStorage.setItem('my_sessions', JSON.stringify(sessions));
+        }
+
+        // --- Socket Events ---
+
+        socket.on('connect', () => {
+            // عند الاتصال، نرسل للخادم قائمة جلساتنا ليقوم بالاشتراك فيها
+            const mySessions = getMySessions();
+            socket.emit('subscribe', mySessions);
+            
+            const list = document.getElementById('accountsList');
+            if (mySessions.length === 0) {
+                 list.innerHTML = '<p id="noAccountsMsg" class="text-center text-slate-400 text-sm mt-10">لم تقم بإضافة حسابات على هذا الجهاز.</p>';
+            } else {
+                 document.getElementById('noAccountsMsg')?.remove();
+            }
+        });
+
+        socket.on('sessionUpdate', ({ sessionId, data }) => {
+            // إضافة الحساب للقائمة فقط إذا كان في جلساتي المحلية
+            const mySessions = getMySessions();
+            if(!mySessions.includes(sessionId)) return;
+
+            document.getElementById('noAccountsMsg')?.remove();
+            
+            // تحديث بطاقة الحساب إذا كانت موجودة، أو إنشاؤها
+            if(!document.getElementById(`card-${sessionId}`)) {
+                addAccountCard(sessionId, data);
+            } else {
+                updateCardUI(sessionId, data);
+            }
+        });
+
+        // حدث خاص لتأكيد إضافة الجلسة الجديدة لهذا المستخدم
+        socket.on('sessionConnected', (sessionId) => {
+            if (sessionId === currentCreatingSession) {
+                saveMySession(sessionId); // حفظ في المتصفح
+                closeModal();
+            }
+        });
+
+        socket.on('sessionDeleted', (sessionId) => {
+            const card = document.getElementById(`card-${sessionId}`);
+            if(card) card.remove();
+            removeMySession(sessionId); // إزالة من المتصفح
+        });
+
+        socket.on('qr', ({ sessionId, src }) => {
+            if(sessionId === currentCreatingSession && connectionMethod === 'qr') {
+                // تأكدنا من حفظ الجلسة مسبقاً لاستقبال التحديثات
+                saveMySession(sessionId); 
+                
+                document.getElementById('connectDisplay').classList.remove('hidden');
+                document.getElementById('connectLoader').classList.add('hidden');
+                document.getElementById('connectStatus').innerText = "امسح الباركود:";
+                const img = document.getElementById('qrImage');
+                img.src = src;
+                img.classList.remove('hidden');
+            }
+        });
+
+        socket.on('pairingCode', ({ sessionId, code }) => {
+            if(sessionId === currentCreatingSession && connectionMethod === 'phone') {
+                saveMySession(sessionId); // حفظ الجلسة مؤقتاً
+                
+                document.getElementById('connectDisplay').classList.remove('hidden');
+                document.getElementById('connectLoader').classList.add('hidden');
+                document.getElementById('connectStatus').classList.add('hidden');
+                
+                const div = document.getElementById('pairingCodeDisplay');
+                div.classList.remove('hidden');
+                document.getElementById('pCode').innerText = code;
+            }
+        });
+
+        socket.on('log', ({ message }) => {
+            const logs = document.getElementById('logs');
+            const div = document.createElement('div');
+            const time = new Date().toLocaleTimeString('ar-EG');
+            div.innerHTML = `<span class="text-slate-500 text-xs mr-2">[${time}]</span>${message}`;
+            logs.prepend(div);
+        });
+
+        // --- UI Logic ---
+
+        function addAccountCard(sessionId, data) {
+            const list = document.getElementById('accountsList');
+            if(document.getElementById(`card-${sessionId}`)) return;
+
+            const div = document.createElement('div');
+            div.id = `card-${sessionId}`;
+            div.className = "relative group";
+            div.innerHTML = `
+                <label class="cursor-pointer block">
+                    <input type="checkbox" class="custom-check hidden" value="${sessionId}">
+                    <div class="bg-white border border-slate-200 rounded-xl p-3 shadow-sm hover:shadow-md transition-all border-l-4 border-l-slate-300">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-bold text-slate-800 text-sm truncate w-24">${sessionId}</h3>
+                            <span class="status-badge px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-500">غير متصل</span>
+                        </div>
+                        <div class="text-xs text-slate-500 flex justify-between mb-2">
+                            <span>المتبقي: <b class="queue-count text-blue-600">0</b></span>
+                            <span>انضم: <b class="joined-count text-emerald-600">0</b></span>
+                        </div>
+                        <div class="flex justify-between items-center mt-1">
+                             <div class="text-xs text-slate-400 font-mono phone-display h-4">...</div>
+                             <div class="text-[10px] text-slate-400 bg-slate-50 px-1 rounded border">الوقت: <span class="interval-display">${data.interval}</span>ث</div>
+                        </div>
+                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity absolute top-2 left-2">
+                            <button onclick="deleteSession('${sessionId}')" class="text-red-500 text-xs hover:bg-red-50 p-1 rounded font-bold">حذف</button>
+                        </div>
+                    </div>
+                </label>
+            `;
+            list.appendChild(div);
+            updateCardUI(sessionId, data);
+        }
+
+        function updateCardUI(sessionId, data) {
+            const card = document.getElementById(`card-${sessionId}`);
+            const badge = card.querySelector('.status-badge');
+            const borderDiv = card.querySelector('div.bg-white');
+            
+            if(data.status === 'connected') {
+                badge.className = "status-badge px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700";
+                badge.innerText = "متصل";
+                borderDiv.classList.replace('border-l-slate-300', 'border-l-emerald-500');
+                if(data.isRunning) {
+                     badge.className = "status-badge px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 animate-pulse";
+                     badge.innerText = "جاري العمل";
+                }
+            } else if (data.status === 'connecting') {
+                badge.className = "status-badge px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-100 text-yellow-700";
+                badge.innerText = "جار الاتصال";
+                borderDiv.classList.replace('border-l-emerald-500', 'border-l-yellow-500');
+                borderDiv.classList.replace('border-l-slate-300', 'border-l-yellow-500');
+            } else {
+                badge.className = "status-badge px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 text-red-700";
+                badge.innerText = "مفصول";
+                borderDiv.classList.replace('border-l-emerald-500', 'border-l-red-500');
+                borderDiv.classList.replace('border-l-yellow-500', 'border-l-red-500');
+            }
+
+            card.querySelector('.queue-count').innerText = (data.queue.length - data.currentIndex);
+            card.querySelector('.joined-count').innerText = data.totalJoined;
+            card.querySelector('.phone-display').innerText = data.phone ? '+' + data.phone : '';
+            card.querySelector('.interval-display').innerText = data.interval;
+        }
+
+        function selectAll() {
+            document.querySelectorAll('.custom-check').forEach(c => c.checked = true);
+        }
+
+        function getSelectedIds() {
+            const inputs = document.querySelectorAll('.custom-check:checked');
+            return Array.from(inputs).map(i => i.value);
+        }
+
+        function sendLinks() {
+            const ids = getSelectedIds();
+            const text = document.getElementById('linksInput').value;
+            if(ids.length === 0) return alert('الرجاء تحديد حساب واحد على الأقل من القائمة');
+            if(!text.trim()) return alert('الرجاء لصق الروابط');
+
+            socket.emit('addLinks', { sessionIds: ids, links: text });
+            document.getElementById('linksInput').value = '';
+        }
+
+        function controlSelected(action) {
+            const ids = getSelectedIds();
+            if(ids.length === 0) return alert('الرجاء تحديد حساب واحد على الأقل');
+            
+            // إصلاح إرسال القيمة للوقت
+            let val = null;
+            if (action === 'interval') {
+                val = document.getElementById('globalInterval').value;
+                if(!val) return alert('أدخل قيمة للوقت');
+            }
+            
+            socket.emit('control', { sessionIds: ids, action: action, value: val });
+        }
+
+        function deleteSession(id) {
+            event.preventDefault(); 
+            if(confirm('هل أنت متأكد من حذف هذا الحساب؟')) {
+                socket.emit('deleteSession', id);
+            }
+        }
+
+        function openModal() { document.getElementById('addModal').classList.remove('hidden'); }
+        function closeModal() { 
+            document.getElementById('addModal').classList.add('hidden'); 
+            resetModal();
+        }
+
+        function switchTab(type) {
+            connectionMethod = type;
+            const tabQr = document.getElementById('tab-qr');
+            const tabPhone = document.getElementById('tab-phone');
+            const phoneArea = document.getElementById('phoneArea');
+
+            if(type === 'qr') {
+                tabQr.className = "flex-1 py-2 rounded-md font-bold text-sm bg-white shadow text-slate-800 transition";
+                tabPhone.className = "flex-1 py-2 rounded-md font-bold text-sm text-slate-500 hover:bg-white/50 transition";
+                phoneArea.classList.add('hidden');
+            } else {
+                tabPhone.className = "flex-1 py-2 rounded-md font-bold text-sm bg-white shadow text-slate-800 transition";
+                tabQr.className = "flex-1 py-2 rounded-md font-bold text-sm text-slate-500 hover:bg-white/50 transition";
+                phoneArea.classList.remove('hidden');
+            }
+        }
+
+        function startSessionCreation() {
+            const name = document.getElementById('newSessionId').value.trim();
+            if(!name) return alert('أدخل اسماً للحساب');
+            
+            const phone = document.getElementById('phoneNumber').value.trim();
+            if(connectionMethod === 'phone' && !phone) return alert('أدخل رقم الهاتف');
+
+            // حفظ الجلسة محلياً فوراً لنستقبل التحديثات
+            saveMySession(name);
+            currentCreatingSession = name;
+            
+            document.getElementById('connectDisplay').classList.remove('hidden');
+            document.getElementById('connectLoader').classList.remove('hidden');
+            document.getElementById('qrImage').classList.add('hidden');
+            document.getElementById('pairingCodeDisplay').classList.add('hidden');
+            document.getElementById('connectStatus').innerText = connectionMethod === 'phone' ? "جاري طلب الكود..." : "جاري توليد الباركود...";
+            document.getElementById('connectStatus').classList.remove('hidden');
+
+            socket.emit('createSession', { 
+                sessionId: name, 
+                method: connectionMethod, 
+                phoneNumber: phone 
+            });
+        }
+
+        function resetModal() {
+            document.getElementById('newSessionId').value = '';
+            document.getElementById('phoneNumber').value = '';
+            document.getElementById('connectDisplay').classList.add('hidden');
+            currentCreatingSession = null;
+        }
+
+    </script>
+</body>
+</html>
